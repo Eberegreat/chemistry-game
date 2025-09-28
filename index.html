@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Educational Chemistry Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles to complement Tailwind CSS */
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation; /* Improves touch responsiveness on mobile */
+        }
+        
+        /* Base styles for view containers */
+        .view {
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Periodic Table Puzzle Styles */
+        #puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(18, minmax(0, 1fr));
+            gap: 4px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .element-tile {
+            aspect-ratio: 1 / 1;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: white;
+            padding: 2px;
+            font-weight: bold;
+        }
+        
+        .element-tile.dragging {
+            opacity: 0.5;
+            transform: scale(1.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .element-tile.placed {
+            cursor: not-allowed;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); }
+            80% { transform: scale(1.1); }
+            100% { transform: scale(1.0); }
+        }
+
+        /* Color coding for element groups */
+        .alkali-metal { background-color: #ef4444; } /* red-500 */
+        .alkaline-earth-metal { background-color: #f97316; } /* orange-500 */
+        .lanthanide { background-color: #ec4899; } /* pink-500 */
+        .actinide { background-color: #d946ef; } /* fuchsia-500 */
+        .transition-metal { background-color: #3b82f6; } /* blue-500 */
+        .post-transition-metal { background-color: #14b8a6; } /* teal-500 */
+        .metalloid { background-color: #8b5cf6; } /* violet-500 */
+        .reactive-nonmetal { background-color: #22c55e; } /* green-500 */
+        .noble-gas { background-color: #a855f7; } /* purple-500 */
+        .unknown { background-color: #6b7280; } /* gray-500 */
+
+        /* Input feedback styles */
+        .correct-answer {
+            animation: correctPulse 0.5s;
+        }
+        .incorrect-answer {
+            animation: incorrectShake 0.5s;
+        }
+        @keyframes correctPulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            100% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+        }
+        @keyframes incorrectShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <!-- Main Container -->
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-5xl min-h-screen flex flex-col">
+
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Chemistry Challenge</h1>
+            <p class="text-lg text-gray-600 mt-2">Master the Periodic Table</p>
+        </header>
+
+        <!-- Main Menu View -->
+        <main id="main-menu" class="view active flex-grow flex flex-col items-center justify-center">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
+                <button data-mode="quiz" class="menu-button bg-blue-500 hover:bg-blue-600 text-white p-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    <h2 class="text-2xl font-bold">Quiz Mode</h2>
+                    <p class="mt-2">Test your knowledge with various question types.</p>
+                </button>
+                <button data-mode="puzzle" class="menu-button bg-green-500 hover:bg-green-600 text-white p-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    <h2 class="text-2xl font-bold">Puzzle Mode</h2>
+                    <p class="mt-2">Drag and drop elements to build the periodic table.</p>
+                </button>
+                <button data-mode="challenge" class="menu-button bg-red-500 hover:bg-red-600 text-white p-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    <h2 class="text-2xl font-bold">Challenge Mode</h2>
+                    <p class="mt-2">Answer as many questions as you can in 60 seconds.</p>
+                </button>
+                <button data-mode="dashboard" class="menu-button bg-purple-500 hover:bg-purple-600 text-white p-6 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    <h2 class="text-2xl font-bold">Dashboard</h2>
+                    <p class="mt-2">Track your progress and see your stats.</p>
+                </button>
+            </div>
+        </main>
+
+        <!-- Quiz & Challenge Mode View -->
+        <div id="quiz-view" class="view flex-grow flex flex-col items-center">
+             <div class="w-full max-w-2xl bg-white p-8 rounded-xl shadow-md">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="quiz-title" class="text-3xl font-bold">Quiz Mode</h2>
+                    <div id="quiz-timer" class="text-2xl font-bold text-red-500 hidden"></div>
+                    <div id="quiz-score" class="text-xl font-semibold">Score: 0</div>
+                </div>
+                <div id="question-container" class="text-center mb-6">
+                    <p id="question-text" class="text-2xl mb-4">What is the symbol for Hydrogen?</p>
+                    <div id="mcq-options" class="grid grid-cols-2 gap-4 mt-4"></div>
+                    <input type="text" id="short-answer-input" class="mt-4 p-3 border-2 border-gray-300 rounded-lg w-full text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your answer...">
+                </div>
+                 <div id="feedback-message" class="text-center text-lg font-medium p-2 rounded-md h-10">&nbsp;</div>
+                 <button id="next-question-btn" class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition hidden">Next Question</button>
+                 <button id="submit-answer-btn" class="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition">Submit</button>
+                 <button class="back-to-menu-btn w-full mt-4 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition">Back to Menu</button>
+            </div>
+        </div>
+
+        <!-- Puzzle Mode View -->
+        <div id="puzzle-view" class="view flex-grow flex flex-col">
+            <div class="text-center mb-4">
+                <h2 class="text-3xl font-bold">Puzzle Mode</h2>
+                <p class="text-gray-600">Drag the elements from the bank to their correct spot on the table.</p>
+                <p class="text-lg font-semibold">Completed: <span id="puzzle-progress">0</span> / 118</p>
+            </div>
+            <div id="puzzle-grid" class="mb-4"></div>
+            <div id="element-bank" class="flex flex-wrap justify-center gap-2 p-4 bg-white rounded-lg shadow-inner min-h-[100px]"></div>
+            <button class="back-to-menu-btn self-center mt-4 bg-gray-500 text-white py-2 px-8 rounded-lg hover:bg-gray-600 transition">Back to Menu</button>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view flex-grow flex flex-col items-center">
+            <div class="w-full max-w-3xl bg-white p-8 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-center mb-6">Your Progress</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div class="bg-blue-100 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-blue-800">Total Games</h3>
+                        <p id="stats-total-games" class="text-3xl font-bold">0</p>
+                    </div>
+                    <div class="bg-green-100 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-green-800">Quiz High Score</h3>
+                        <p id="stats-quiz-best" class="text-3xl font-bold">0</p>
+                    </div>
+                    <div class="bg-red-100 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-red-800">Challenge High Score</h3>
+                        <p id="stats-challenge-best" class="text-3xl font-bold">0</p>
+                    </div>
+                </div>
+                 <div class="mt-8">
+                    <h3 class="text-xl font-semibold text-center mb-4">Performance</h3>
+                    <div class="bg-gray-100 p-6 rounded-lg">
+                        <div class="flex justify-between mb-2">
+                            <span>Accuracy</span>
+                            <span id="stats-accuracy" class="font-bold">N/A</span>
+                        </div>
+                        <div class="bg-gray-300 w-full h-4 rounded-full">
+                            <div id="stats-accuracy-bar" class="bg-purple-500 h-4 rounded-full" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                     <div class="bg-gray-100 p-6 rounded-lg mt-4">
+                        <h4 class="text-lg font-semibold text-center mb-2">Weak Area</h4>
+                        <p id="stats-weak-area" class="text-center text-xl font-bold text-gray-700">Play some games to find out!</p>
+                     </div>
+                </div>
+                <div class="text-center mt-8">
+                    <button id="reset-progress-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition">Reset Progress</button>
+                    <button class="back-to-menu-btn mt-4 md:mt-0 md:ml-4 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition">Back to Menu</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DATA MODEL ---
+        // Storing data directly in the script to adhere to the single-file requirement.
+        const elementsData = [
+            {"atomicNumber": 1, "symbol": "H", "name": "Hydrogen", "group": 1, "period": 1, "category": "reactive-nonmetal"},
+            {"atomicNumber": 2, "symbol": "He", "name": "Helium", "group": 18, "period": 1, "category": "noble-gas"},
+            {"atomicNumber": 3, "symbol": "Li", "name": "Lithium", "group": 1, "period": 2, "category": "alkali-metal"},
+            {"atomicNumber": 4, "symbol": "Be", "name": "Beryllium", "group": 2, "period": 2, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 5, "symbol": "B", "name": "Boron", "group": 13, "period": 2, "category": "metalloid"},
+            {"atomicNumber": 6, "symbol": "C", "name": "Carbon", "group": 14, "period": 2, "category": "reactive-nonmetal"},
+            {"atomicNumber": 7, "symbol": "N", "name": "Nitrogen", "group": 15, "period": 2, "category": "reactive-nonmetal"},
+            {"atomicNumber": 8, "symbol": "O", "name": "Oxygen", "group": 16, "period": 2, "category": "reactive-nonmetal"},
+            {"atomicNumber": 9, "symbol": "F", "name": "Fluorine", "group": 17, "period": 2, "category": "reactive-nonmetal"},
+            {"atomicNumber": 10, "symbol": "Ne", "name": "Neon", "group": 18, "period": 2, "category": "noble-gas"},
+            {"atomicNumber": 11, "symbol": "Na", "name": "Sodium", "group": 1, "period": 3, "category": "alkali-metal"},
+            {"atomicNumber": 12, "symbol": "Mg", "name": "Magnesium", "group": 2, "period": 3, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 13, "symbol": "Al", "name": "Aluminium", "group": 13, "period": 3, "category": "post-transition-metal"},
+            {"atomicNumber": 14, "symbol": "Si", "name": "Silicon", "group": 14, "period": 3, "category": "metalloid"},
+            {"atomicNumber": 15, "symbol": "P", "name": "Phosphorus", "group": 15, "period": 3, "category": "reactive-nonmetal"},
+            {"atomicNumber": 16, "symbol": "S", "name": "Sulfur", "group": 16, "period": 3, "category": "reactive-nonmetal"},
+            {"atomicNumber": 17, "symbol": "Cl", "name": "Chlorine", "group": 17, "period": 3, "category": "reactive-nonmetal"},
+            {"atomicNumber": 18, "symbol": "Ar", "name": "Argon", "group": 18, "period": 3, "category": "noble-gas"},
+            {"atomicNumber": 19, "symbol": "K", "name": "Potassium", "group": 1, "period": 4, "category": "alkali-metal"},
+            {"atomicNumber": 20, "symbol": "Ca", "name": "Calcium", "group": 2, "period": 4, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 21, "symbol": "Sc", "name": "Scandium", "group": 3, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 22, "symbol": "Ti", "name": "Titanium", "group": 4, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 23, "symbol": "V", "name": "Vanadium", "group": 5, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 24, "symbol": "Cr", "name": "Chromium", "group": 6, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 25, "symbol": "Mn", "name": "Manganese", "group": 7, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 26, "symbol": "Fe", "name": "Iron", "group": 8, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 27, "symbol": "Co", "name": "Cobalt", "group": 9, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 28, "symbol": "Ni", "name": "Nickel", "group": 10, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 29, "symbol": "Cu", "name": "Copper", "group": 11, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 30, "symbol": "Zn", "name": "Zinc", "group": 12, "period": 4, "category": "transition-metal"},
+            {"atomicNumber": 31, "symbol": "Ga", "name": "Gallium", "group": 13, "period": 4, "category": "post-transition-metal"},
+            {"atomicNumber": 32, "symbol": "Ge", "name": "Germanium", "group": 14, "period": 4, "category": "metalloid"},
+            {"atomicNumber": 33, "symbol": "As", "name": "Arsenic", "group": 15, "period": 4, "category": "metalloid"},
+            {"atomicNumber": 34, "symbol": "Se", "name": "Selenium", "group": 16, "period": 4, "category": "reactive-nonmetal"},
+            {"atomicNumber": 35, "symbol": "Br", "name": "Bromine", "group": 17, "period": 4, "category": "reactive-nonmetal"},
+            {"atomicNumber": 36, "symbol": "Kr", "name": "Krypton", "group": 18, "period": 4, "category": "noble-gas"},
+            {"atomicNumber": 37, "symbol": "Rb", "name": "Rubidium", "group": 1, "period": 5, "category": "alkali-metal"},
+            {"atomicNumber": 38, "symbol": "Sr", "name": "Strontium", "group": 2, "period": 5, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 39, "symbol": "Y", "name": "Yttrium", "group": 3, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 40, "symbol": "Zr", "name": "Zirconium", "group": 4, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 41, "symbol": "Nb", "name": "Niobium", "group": 5, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 42, "symbol": "Mo", "name": "Molybdenum", "group": 6, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 43, "symbol": "Tc", "name": "Technetium", "group": 7, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 44, "symbol": "Ru", "name": "Ruthenium", "group": 8, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 45, "symbol": "Rh", "name": "Rhodium", "group": 9, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 46, "symbol": "Pd", "name": "Palladium", "group": 10, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 47, "symbol": "Ag", "name": "Silver", "group": 11, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 48, "symbol": "Cd", "name": "Cadmium", "group": 12, "period": 5, "category": "transition-metal"},
+            {"atomicNumber": 49, "symbol": "In", "name": "Indium", "group": 13, "period": 5, "category": "post-transition-metal"},
+            {"atomicNumber": 50, "symbol": "Sn", "name": "Tin", "group": 14, "period": 5, "category": "post-transition-metal"},
+            {"atomicNumber": 51, "symbol": "Sb", "name": "Antimony", "group": 15, "period": 5, "category": "metalloid"},
+            {"atomicNumber": 52, "symbol": "Te", "name": "Tellurium", "group": 16, "period": 5, "category": "metalloid"},
+            {"atomicNumber": 53, "symbol": "I", "name": "Iodine", "group": 17, "period": 5, "category": "reactive-nonmetal"},
+            {"atomicNumber": 54, "symbol": "Xe", "name": "Xenon", "group": 18, "period": 5, "category": "noble-gas"},
+            {"atomicNumber": 55, "symbol": "Cs", "name": "Caesium", "group": 1, "period": 6, "category": "alkali-metal"},
+            {"atomicNumber": 56, "symbol": "Ba", "name": "Barium", "group": 2, "period": 6, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 57, "symbol": "La", "name": "Lanthanum", "group": 3, "period": 6, "category": "lanthanide"},
+            {"atomicNumber": 58, "symbol": "Ce", "name": "Cerium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 59, "symbol": "Pr", "name": "Praseodymium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 60, "symbol": "Nd", "name": "Neodymium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 61, "symbol": "Pm", "name": "Promethium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 62, "symbol": "Sm", "name": "Samarium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 63, "symbol": "Eu", "name": "Europium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 64, "symbol": "Gd", "name": "Gadolinium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 65, "symbol": "Tb", "name": "Terbium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 66, "symbol": "Dy", "name": "Dysprosium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 67, "symbol": "Ho", "name": "Holmium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 68, "symbol": "Er", "name": "Erbium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 69, "symbol": "Tm", "name": "Thulium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 70, "symbol": "Yb", "name": "Ytterbium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 71, "symbol": "Lu", "name": "Lutetium", "group": -1, "period": 8, "category": "lanthanide"},
+            {"atomicNumber": 72, "symbol": "Hf", "name": "Hafnium", "group": 4, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 73, "symbol": "Ta", "name": "Tantalum", "group": 5, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 74, "symbol": "W", "name": "Tungsten", "group": 6, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 75, "symbol": "Re", "name": "Rhenium", "group": 7, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 76, "symbol": "Os", "name": "Osmium", "group": 8, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 77, "symbol": "Ir", "name": "Iridium", "group": 9, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 78, "symbol": "Pt", "name": "Platinum", "group": 10, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 79, "symbol": "Au", "name": "Gold", "group": 11, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 80, "symbol": "Hg", "name": "Mercury", "group": 12, "period": 6, "category": "transition-metal"},
+            {"atomicNumber": 81, "symbol": "Tl", "name": "Thallium", "group": 13, "period": 6, "category": "post-transition-metal"},
+            {"atomicNumber": 82, "symbol": "Pb", "name": "Lead", "group": 14, "period": 6, "category": "post-transition-metal"},
+            {"atomicNumber": 83, "symbol": "Bi", "name": "Bismuth", "group": 15, "period": 6, "category": "post-transition-metal"},
+            {"atomicNumber": 84, "symbol": "Po", "name": "Polonium", "group": 16, "period": 6, "category": "metalloid"},
+            {"atomicNumber": 85, "symbol": "At", "name": "Astatine", "group": 17, "period": 6, "category": "metalloid"},
+            {"atomicNumber": 86, "symbol": "Rn", "name": "Radon", "group": 18, "period": 6, "category": "noble-gas"},
+            {"atomicNumber": 87, "symbol": "Fr", "name": "Francium", "group": 1, "period": 7, "category": "alkali-metal"},
+            {"atomicNumber": 88, "symbol": "Ra", "name": "Radium", "group": 2, "period": 7, "category": "alkaline-earth-metal"},
+            {"atomicNumber": 89, "symbol": "Ac", "name": "Actinium", "group": 3, "period": 7, "category": "actinide"},
+            {"atomicNumber": 90, "symbol": "Th", "name": "Thorium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 91, "symbol": "Pa", "name": "Protactinium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 92, "symbol": "U", "name": "Uranium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 93, "symbol": "Np", "name": "Neptunium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 94, "symbol": "Pu", "name": "Plutonium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 95, "symbol": "Am", "name": "Americium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 96, "symbol": "Cm", "name": "Curium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 97, "symbol": "Bk", "name": "Berkelium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 98, "symbol": "Cf", "name": "Californium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 99, "symbol": "Es", "name": "Einsteinium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 100, "symbol": "Fm", "name": "Fermium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 101, "symbol": "Md", "name": "Mendelevium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 102, "symbol": "No", "name": "Nobelium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 103, "symbol": "Lr", "name": "Lawrencium", "group": -1, "period": 9, "category": "actinide"},
+            {"atomicNumber": 104, "symbol": "Rf", "name": "Rutherfordium", "group": 4, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 105, "symbol": "Db", "name": "Dubnium", "group": 5, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 106, "symbol": "Sg", "name": "Seaborgium", "group": 6, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 107, "symbol": "Bh", "name": "Bohrium", "group": 7, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 108, "symbol": "Hs", "name": "Hassium", "group": 8, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 109, "symbol": "Mt", "name": "Meitnerium", "group": 9, "period": 7, "category": "unknown"},
+            {"atomicNumber": 110, "symbol": "Ds", "name": "Darmstadtium", "group": 10, "period": 7, "category": "unknown"},
+            {"atomicNumber": 111, "symbol": "Rg", "name": "Roentgenium", "group": 11, "period": 7, "category": "unknown"},
+            {"atomicNumber": 112, "symbol": "Cn", "name": "Copernicium", "group": 12, "period": 7, "category": "transition-metal"},
+            {"atomicNumber": 113, "symbol": "Nh", "name": "Nihonium", "group": 13, "period": 7, "category": "unknown"},
+            {"atomicNumber": 114, "symbol": "Fl", "name": "Flerovium", "group": 14, "period": 7, "category": "post-transition-metal"},
+            {"atomicNumber": 115, "symbol": "Mc", "name": "Moscovium", "group": 15, "period": 7, "category": "unknown"},
+            {"atomicNumber": 116, "symbol": "Lv", "name": "Livermorium", "group": 16, "period": 7, "category": "unknown"},
+            {"atomicNumber": 117, "symbol": "Ts", "name": "Tennessine", "group": 17, "period": 7, "category": "unknown"},
+            {"atomicNumber": 118, "symbol": "Og", "name": "Oganesson", "group": 18, "period": 7, "category": "unknown"}
+        ];
+
+        // --- DOM ELEMENTS ---
+        const views = document.querySelectorAll('.view');
+        const menuButtons = document.querySelectorAll('.menu-button');
+        const backToMenuButtons = document.querySelectorAll('.back-to-menu-btn');
+        const quizView = document.getElementById('quiz-view');
+        const quizTitle = document.getElementById('quiz-title');
+        const quizTimerEl = document.getElementById('quiz-timer');
+        const quizScoreEl = document.getElementById('quiz-score');
+        const questionText = document.getElementById('question-text');
+        const mcqOptions = document.getElementById('mcq-options');
+        const shortAnswerInput = document.getElementById('short-answer-input');
+        const submitAnswerBtn = document.getElementById('submit-answer-btn');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const puzzleGrid = document.getElementById('puzzle-grid');
+        const elementBank = document.getElementById('element-bank');
+        const puzzleProgress = document.getElementById('puzzle-progress');
+        const dashboardView = document.getElementById('dashboard-view');
+        const resetProgressBtn = document.getElementById('reset-progress-btn');
+
+        // --- GAME STATE ---
+        let currentMode = 'main-menu';
+        let currentQuestion = {};
+        let score = 0;
+        let timer;
+        let timeLeft = 60;
+        let lastFiveQuestions = [];
+        let progressStats = loadProgress();
+
+        // --- LOCALSTORAGE ---
+        function loadProgress() {
+            const savedStats = localStorage.getItem('progressStats');
+            if (savedStats) {
+                return JSON.parse(savedStats);
+            }
+            return {
+                totalGames: 0,
+                quizScores: [],
+                challengeScores: [],
+                correctAnswers: 0,
+                incorrectAnswers: 0,
+                weakGroups: {}, // e.g., { "alkali-metal": 3, "noble-gas": 1 }
+                puzzleCompleted: []
+            };
+        }
+
+        function saveProgress() {
+            localStorage.setItem('progressStats', JSON.stringify(progressStats));
+        }
+
+        // --- VIEW MANAGEMENT ---
+        function switchView(viewId) {
+            views.forEach(view => {
+                view.classList.remove('active');
+            });
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        // --- QUIZ & CHALLENGE LOGIC ---
+        function startQuiz(mode) {
+            currentMode = mode;
+            score = 0;
+            quizScoreEl.textContent = 'Score: 0';
+            feedbackMessage.innerHTML = '&nbsp;';
+            if (mode === 'challenge') {
+                quizTitle.textContent = 'Challenge Mode';
+                quizTimerEl.classList.remove('hidden');
+                startTimer();
+            } else {
+                quizTitle.textContent = 'Quiz Mode';
+                quizTimerEl.classList.add('hidden');
+            }
+            nextQuestion();
+            switchView('quiz-view');
+        }
+        
+        function startTimer() {
+            timeLeft = 60;
+            quizTimerEl.textContent = timeLeft;
+            timer = setInterval(() => {
+                timeLeft--;
+                quizTimerEl.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            if (currentMode === 'quiz') {
+                progressStats.quizScores.push(score);
+            } else {
+                progressStats.challengeScores.push(score);
+            }
+            progressStats.totalGames++;
+            saveProgress();
+            
+            feedbackMessage.textContent = `Time's up! Final Score: ${score}`;
+            feedbackMessage.className = 'text-center text-lg font-medium p-2 rounded-md text-blue-700 bg-blue-100';
+            submitAnswerBtn.classList.add('hidden');
+            nextQuestionBtn.classList.add('hidden');
+        }
+
+        function getRandomElement() {
+            let element;
+            do {
+                element = elementsData[Math.floor(Math.random() * elementsData.length)];
+            } while (lastFiveQuestions.includes(element.atomicNumber));
+            
+            lastFiveQuestions.push(element.atomicNumber);
+            if (lastFiveQuestions.length > 5) {
+                lastFiveQuestions.shift();
+            }
+            return element;
+        }
+
+        function nextQuestion() {
+            currentQuestion = {};
+            const element = getRandomElement();
+            const questionTypes = ['symbolToName', 'nameToSymbol', 'numberToName', 'nameToNumber'];
+            const questionType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
+            
+            // Randomly choose between MCQ and Short Answer
+            const isMcq = Math.random() > 0.5;
+
+            mcqOptions.innerHTML = '';
+            mcqOptions.classList.add('hidden');
+            shortAnswerInput.classList.add('hidden');
+            shortAnswerInput.disabled = false;
+            submitAnswerBtn.classList.remove('hidden');
+            nextQuestionBtn.classList.add('hidden');
+            shortAnswerInput.value = '';
+            feedbackMessage.innerHTML = '&nbsp;';
+            shortAnswerInput.classList.remove('correct-answer', 'incorrect-answer');
+
+            switch (questionType) {
+                case 'symbolToName':
+                    questionText.textContent = `What is the name of the element with the symbol "${element.symbol}"?`;
+                    currentQuestion.answer = element.name;
+                    break;
+                case 'nameToSymbol':
+                    questionText.textContent = `What is the symbol for ${element.name}?`;
+                    currentQuestion.answer = element.symbol;
+                    break;
+                case 'numberToName':
+                    questionText.textContent = `Which element has atomic number ${element.atomicNumber}?`;
+                    currentQuestion.answer = element.name;
+                    break;
+                case 'nameToNumber':
+                    questionText.textContent = `What is the atomic number of ${element.name}?`;
+                    currentQuestion.answer = element.atomicNumber.toString();
+                    break;
+            }
+
+            currentQuestion.element = element;
+
+            if (isMcq && currentMode !== 'challenge') { // Force short answer for speed in challenge
+                mcqOptions.classList.remove('hidden');
+                const options = generateMcqOptions(currentQuestion.answer, questionType);
+                options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.className = 'p-3 bg-gray-200 rounded-lg hover:bg-gray-300 transition';
+                    button.onclick = () => checkAnswer(option);
+                    mcqOptions.appendChild(button);
+                });
+                submitAnswerBtn.classList.add('hidden');
+            } else {
+                shortAnswerInput.classList.remove('hidden');
+                submitAnswerBtn.classList.remove('hidden');
+            }
+        }
+        
+        function generateMcqOptions(correctAnswer, questionType) {
+            let options = [correctAnswer];
+            let field;
+
+            if (questionType.includes('Symbol')) field = 'symbol';
+            else if (questionType.includes('Number')) field = 'atomicNumber';
+            else field = 'name';
+
+            while (options.length < 4) {
+                let randomElement = elementsData[Math.floor(Math.random() * elementsData.length)];
+                let option = randomElement[field].toString();
+                if (!options.includes(option)) {
+                    options.push(option);
+                }
+            }
+            return options.sort(() => Math.random() - 0.5);
+        }
+
+        function checkAnswer(userAnswer) {
+            if (!currentQuestion || typeof currentQuestion.answer === 'undefined') {
+                return;
+            }
+            const isCorrect = userAnswer.trim().toLowerCase() === currentQuestion.answer.toString().toLowerCase();
+            
+            if (isCorrect) {
+                score++;
+                feedbackMessage.textContent = 'Correct!';
+                feedbackMessage.className = 'text-center text-lg font-medium p-2 rounded-md text-green-700 bg-green-100';
+                progressStats.correctAnswers++;
+                shortAnswerInput.classList.add('correct-answer');
+            } else {
+                feedbackMessage.innerHTML = `Incorrect. The correct answer is <strong>${currentQuestion.answer}</strong>.`;
+                feedbackMessage.className = 'text-center text-lg font-medium p-2 rounded-md text-red-700 bg-red-100';
+                progressStats.incorrectAnswers++;
+                if (progressStats.weakGroups[currentQuestion.element.category]) {
+                    progressStats.weakGroups[currentQuestion.element.category]++;
+                } else {
+                    progressStats.weakGroups[currentQuestion.element.category] = 1;
+                }
+                shortAnswerInput.classList.add('incorrect-answer');
+            }
+
+            quizScoreEl.textContent = `Score: ${score}`;
+            
+            if (currentMode === 'challenge') {
+                setTimeout(nextQuestion, 500);
+            } else {
+                submitAnswerBtn.classList.add('hidden');
+                nextQuestionBtn.classList.remove('hidden');
+                mcqOptions.querySelectorAll('button').forEach(b => b.disabled = true);
+                shortAnswerInput.disabled = true;
+            }
+        }
+        
+        submitAnswerBtn.addEventListener('click', () => checkAnswer(shortAnswerInput.value));
+        shortAnswerInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') checkAnswer(shortAnswerInput.value);
+        });
+        nextQuestionBtn.addEventListener('click', nextQuestion);
+
+        // --- PUZZLE LOGIC ---
+        function startPuzzle() {
+            setupPuzzleGrid();
+            setupElementBank();
+            updatePuzzleProgress();
+            switchView('puzzle-view');
+        }
+
+        function setupPuzzleGrid() {
+            puzzleGrid.innerHTML = '';
+            const grid = Array(9).fill(null).map(() => Array(18).fill(null));
+
+            elementsData.forEach(el => {
+                if(el.period > 0 && el.group > 0) {
+                    grid[el.period - 1][el.group - 1] = el;
+                }
+            });
+            
+            // Lanthanides and Actinides placeholders
+            for(let i=0; i<15; i++) {
+                grid[7][i+3] = elementsData.find(e => e.atomicNumber === 57 + i);
+                grid[8][i+3] = elementsData.find(e => e.atomicNumber === 89 + i);
+            }
+            
+            grid[5][2] = { name: "57-71", category: "lanthanide" };
+            grid[6][2] = { name: "89-103", category: "actinide" };
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 18; c++) {
+                    const cell = document.createElement('div');
+                    if (grid[r][c] && (grid[r][c].name === "57-71" || grid[r][c].name === "89-103")) {
+                         cell.className = `grid-cell bg-gray-200 ${grid[r][c].category}`;
+                         cell.textContent = grid[r][c].name;
+                    } else if (grid[r][c]) {
+                        cell.className = 'grid-cell bg-gray-200';
+                        cell.dataset.period = r + 1;
+                        cell.dataset.group = c + 1;
+                        cell.dataset.atomicNumber = grid[r][c].atomicNumber;
+                        cell.addEventListener('dragover', e => e.preventDefault());
+                        cell.addEventListener('drop', onDrop);
+                    } else {
+                        // Empty cell, no element goes here
+                    }
+                    puzzleGrid.appendChild(cell);
+                }
+            }
+        }
+
+        function setupElementBank() {
+            elementBank.innerHTML = '';
+            const shuffledElements = [...elementsData].sort(() => Math.random() - 0.5);
+            shuffledElements.forEach(el => {
+                if (progressStats.puzzleCompleted.includes(el.atomicNumber)) return;
+
+                const tile = document.createElement('div');
+                tile.className = `element-tile text-xs w-12 h-12 ${el.category}`;
+                tile.draggable = true;
+                tile.dataset.atomicNumber = el.atomicNumber;
+                tile.innerHTML = `<div class="font-bold text-lg">${el.symbol}</div><div>${el.name}</div>`;
+                tile.addEventListener('dragstart', onDragStart);
+                elementBank.appendChild(tile);
+            });
+            // Re-render placed elements
+            progressStats.puzzleCompleted.forEach(num => placeElementInGrid(num));
+        }
+        
+        function onDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.atomicNumber);
+            setTimeout(() => e.target.classList.add('dragging'), 0);
+        }
+
+        function onDrop(e) {
+            e.preventDefault();
+            const atomicNumber = e.dataTransfer.getData('text/plain');
+            const targetCell = e.target.closest('.grid-cell');
+            const draggedTile = document.querySelector(`.element-tile[data-atomic-number='${atomicNumber}']`);
+            
+            if (draggedTile) {
+                 draggedTile.classList.remove('dragging');
+            }
+
+            if (targetCell && targetCell.dataset.atomicNumber === atomicNumber) {
+                placeElementInGrid(atomicNumber, targetCell);
+                draggedTile.remove();
+                progressStats.puzzleCompleted.push(parseInt(atomicNumber));
+                updatePuzzleProgress();
+                saveProgress();
+            } else {
+                 if(draggedTile) {
+                    draggedTile.classList.add('incorrect-answer');
+                    setTimeout(() => draggedTile.classList.remove('incorrect-answer'), 500);
+                 }
+            }
+        }
+        
+        function placeElementInGrid(atomicNumber, targetCell = null) {
+            const element = elementsData.find(el => el.atomicNumber == atomicNumber);
+            if (!targetCell) {
+                 if(element.period <= 7) {
+                    targetCell = document.querySelector(`.grid-cell[data-atomic-number='${atomicNumber}']`);
+                 } else {
+                    // Find correct cell for Lanthanides/Actinides
+                    let groupIndex;
+                    if(element.category === 'lanthanide') {
+                        groupIndex = element.atomicNumber - 57 + 4;
+                        targetCell = puzzleGrid.children[7 * 18 + groupIndex -1];
+                    } else { // actinide
+                        groupIndex = element.atomicNumber - 89 + 4;
+                        targetCell = puzzleGrid.children[8 * 18 + groupIndex -1];
+                    }
+                 }
+            }
+
+            if(targetCell) {
+                targetCell.innerHTML = '';
+                const tile = document.createElement('div');
+                tile.className = `element-tile text-xs w-full h-full ${element.category} placed`;
+                tile.innerHTML = `<div class="text-gray-200 text-sm absolute top-1 left-1">${element.atomicNumber}</div><div class="font-bold text-lg">${element.symbol}</div>`;
+                targetCell.appendChild(tile);
+            }
+        }
+
+        function updatePuzzleProgress() {
+            const completedCount = progressStats.puzzleCompleted.length;
+            puzzleProgress.textContent = completedCount;
+             if(completedCount === elementsData.length) {
+                puzzleProgress.parentElement.innerHTML += " <span class='text-green-500 font-bold'>Congratulations!</span>";
+             }
+        }
+
+
+        // --- DASHBOARD LOGIC ---
+        function showDashboard() {
+            const { totalGames, quizScores, challengeScores, correctAnswers, incorrectAnswers, weakGroups } = progressStats;
+
+            document.getElementById('stats-total-games').textContent = totalGames;
+            document.getElementById('stats-quiz-best').textContent = quizScores.length > 0 ? Math.max(...quizScores) : 0;
+            document.getElementById('stats-challenge-best').textContent = challengeScores.length > 0 ? Math.max(...challengeScores) : 0;
+            
+            const totalAnswers = correctAnswers + incorrectAnswers;
+            const accuracy = totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 100) : 0;
+            
+            document.getElementById('stats-accuracy').textContent = totalAnswers > 0 ? `${accuracy}%` : 'N/A';
+            document.getElementById('stats-accuracy-bar').style.width = `${accuracy}%`;
+
+            if (Object.keys(weakGroups).length > 0) {
+                const weakArea = Object.entries(weakGroups).sort((a, b) => b[1] - a[1])[0][0];
+                const formattedName = weakArea.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                document.getElementById('stats-weak-area').textContent = formattedName;
+            } else {
+                document.getElementById('stats-weak-area').textContent = 'Play some games to find out!';
+            }
+            
+            switchView('dashboard-view');
+        }
+        
+        resetProgressBtn.addEventListener('click', () => {
+             if (confirm('Are you sure you want to reset all your progress? This cannot be undone.')) {
+                localStorage.removeItem('progressStats');
+                progressStats = loadProgress();
+                showDashboard();
+            }
+        });
+
+        // --- EVENT LISTENERS ---
+        menuButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const mode = button.dataset.mode;
+                if (mode === 'quiz') startQuiz('quiz');
+                else if (mode === 'challenge') startQuiz('challenge');
+                else if (mode === 'puzzle') startPuzzle();
+                else if (mode === 'dashboard') showDashboard();
+            });
+        });
+
+        backToMenuButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                clearInterval(timer);
+                switchView('main-menu');
+            });
+        });
+    });
+    </script>
+</body>
+</html>
+
+
